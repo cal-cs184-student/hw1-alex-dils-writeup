@@ -78,6 +78,7 @@
 <a href="#task1">1. Triangles</a>
 <a href="#task2">2. Supersampling</a>
 <a href="#task3">3. Transforms</a>
+<a href="#task4">4. Barycentric coordinates</a>
 </nav>
 </header>
 <section id="task1">
@@ -247,6 +248,34 @@ Keeping one sample in each cell spreads the samples across the pixel, while movi
 <div class="single"><figure><img src="images/task3-dab-viewport-10.png" alt="The dabbing cubeman and canvas outline rotated clockwise by 10 degrees"><figcaption><br></figcaption></figure></div>
 <p><br></p>
 <div class="single"><figure><img src="images/task3-dab-spin.gif" alt="Dabbing cubeman and canvas rotating clockwise through a full circle"><figcaption>dabbin rotating</figcaption></figure></div>
+</section>
+
+<section id="task4">
+<h2>Task 4: Barycentric coordinates</h2>
+<p>Barycentric coordinates describe a point as a weighted combination of a triangle's three vertices. I use one weight for each vertex, with the three weights adding to one. Inside the triangle, the weights are nonnegative. At a vertex, its weight is one and the other two are zero. On an edge, the weight for the opposite vertex is zero. This gives me a way to blend the vertex colors smoothly across the triangle.</p>
+<div class="equation">\[P = \alpha V_0 + \beta V_1 + \gamma V_2,\qquad \alpha+\beta+\gamma=1\]</div>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Prepare the triangle
+<ul><li>I check the signed area and return if the triangle has no area. If the winding is reversed, I swap vertices 1 and 2 along with their colors, so each color stays attached to its vertex. I clip the triangle's bounding box to the framebuffer and prepare the three edge equations once.</li></ul>
+</li>
+<li>Find the sample's weights
+<ul><li>I evaluate the three edges at the sample position. A negative edge value means the sample is outside, while zero is included so boundary samples are drawn. Each weight is the area of the subtriangle opposite its vertex divided by the whole triangle's area. The edge functions give twice those signed areas, so the factor of two cancels. With \(D=E_{01}(V_2)\), I use:
+<div class="equation">\[\alpha=\frac{E_{12}(P)}{D},\qquad \beta=\frac{E_{20}(P)}{D},\qquad \gamma=\frac{E_{01}(P)}{D}\]</div>
+</li></ul>
+</li>
+<li>Blend the colors
+<ul><li>Like we talked about in lecture, I multiply each vertex color by its weight and add the results. I apply the same weights to the red, green, and blue components. This produces the vertex's own color at that vertex, a blend of two colors along an edge, and a blend of all three in the interior.
+<div class="equation">\[C(P)=\alpha C_0+\beta C_1+\gamma C_2\]</div>
+</li></ul>
+</li>
+<li>Store and resolve the samples
+<ul><li>At one sample per pixel, I evaluate the pixel center. At higher sample rates, I evaluate each grid sample separately; when jitter is enabled, I use the same deterministic sample positions as the single-color triangles. I store each covered sample's interpolated color with <code>fill_sample</code>. The existing resolve step averages the samples into the final framebuffer after the scene is drawn.</li></ul>
+</li>
+</ol>
+<h3>Rendered</h3>
+<div class="single"><figure><img src="images/task4-rgb-triangle.png" alt="Barycentric color triangle with red at the top, green at the lower left, blue at the lower right, and gray near its centroid"></figure></div>
+<div class="single"><figure><img src="images/task4-test7.png" alt="test7 color wheel with a black center and smoothly interpolated colors around the rim"></figure></div>
 </section>
 
 </main>
