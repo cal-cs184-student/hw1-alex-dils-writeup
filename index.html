@@ -1,112 +1,172 @@
-<html>
-	<head>
-		<script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=default'></script>
-		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-		<style>
-			h1 {
-				text-align: center;
-			}
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<title>Alex Dils | CS184 Homework 1</title>
+<style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #202833; background: #f5f6f8; font: 17px/1.6 system-ui, sans-serif; }
+    main { max-width: 1050px; margin: auto; padding: 40px 32px; background: white; }
+    h1 { font-size: 2.3rem; line-height: 1.15; margin-bottom: 12px; }
+    h2 { margin-top: 42px; padding-top: 22px; border-top: 2px solid #dbe1e8; line-height: 1.25; }
+    h3 { margin: 26px 0 8px; font-size: 1.15rem; }
+    p { margin: 12px 0; }
+    li { margin: 6px 0; }
+    .task-algorithm ul, .optimization-ideas ul { margin: 6px 0 12px; padding-left: 24px; list-style-type: disc; }
+    .optimization-ideas > li::marker { content: counter(list-item) ") "; }
+    a { color: #145c9c; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 24px 0; }
+    code, kbd { background: #edf1f5; padding: 2px 5px; border-radius: 4px; font: .9em ui-monospace, monospace; }
+    pre { background: #edf1f5; padding: 14px; overflow-x: auto; line-height: 1.45; }
+    .summary { padding: 16px 20px; background: #eef4fa; border-left: 4px solid #145c9c; }
+    .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    figure { margin: 16px 0; break-inside: avoid; }
+    img { display: block; width: 100%; height: auto; border: 1px solid #dbe1e8; }
+    .single { max-width: 720px; margin: auto; }
+    figcaption { font-size: .88rem; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: .92rem; }
+    th, td { text-align: left; padding: 8px; border: 1px solid #dbe1e8; vertical-align: top; }
+    th { background: #edf1f5; }
+    .note { font-size: .9rem; color: #526171; }
+    @media (max-width: 640px) { main { padding: 24px 16px; } .images { grid-template-columns: 1fr; } }
+    @page { size: letter; margin: .6in; }
+    @media print {
+      body { font-size: 10.5pt; line-height: 1.45; background: white; }
+      main { padding: 0; max-width: none; }
+      h1 { font-size: 27pt; } h2 { font-size: 19pt; } h3 { font-size: 13pt; }
+      nav { display: none; }
+      section { break-before: page; }
+      section:first-of-type { break-before: auto; }
+      h2, h3 { break-after: avoid; }
+      h2 { margin: 0 0 14px; padding-top: 0; border-top: 0; }
+      h3 { margin-top: 16px; }
+      .single { max-width: 3.2in; }
+      .images { max-width: 6in; margin: auto; }
+      .extra-page { break-before: page; }
+      table { break-inside: avoid; font-size: 9pt; }
+      th, td { padding: 5px; }
+      pre { font-size: 8.5pt; }
+      figure, tr, .summary { break-inside: avoid; }
+      .images { gap: 12px; }
+      figcaption, .note { font-size: 9pt; }
+      a { color: #145c9c; }
+    }
 
-			.container {
-				margin: 0 auto;
-				padding: 60px 20%;
-			}
+    .equation { background: #edf1f5; padding: 12px 16px; margin: 16px 0; border-radius: 6px; overflow-x: auto; }
+    .equation mjx-container[display="true"] { margin: 0; }
+    @media print {
+      .equation { break-inside: avoid; font-size: 10pt; }
+      p, li { orphans: 3; widows: 3; }
+    }
 
-			figure {
-				text-align: center;
-			}
+    @media print {
+      #task1 .extra-page { break-before: auto; }
+      .edge-definition, .task-result { break-inside: avoid; }
+    }
+</style>
+<!-- MathJax renders LaTeX delimited by \( ... \) and \[ ... \]. -->
+<script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-svg.js" id="MathJax-script"></script>
+</head>
+<body>
+<main>
+<header>
+<p>CS184/284A · Fall 2026 · Alex Dils</p>
+<h1>Homework 1: Rasterizer</h1>
+<p>github pages link and alex-dils.com/courses/hw/hw1</p>
+<nav aria-label="Sections">
+<a href="#task1">1. Triangles</a>
+</nav>
+</header>
+<section id="task1">
+<h2>Task 1: Drawing triangles</h2>
+<p>Rasterization is deciding which pixels should be mapped from a continous triangle.
+The triangle is defined by three vertices, which form continuous edges, but the screen is a grid of discrete pixels.
+For this task, I use one sample at the center of each pixel. If pixel P is inside the triangle or exactly on one of its edges,
+I give that pixel the triangle's color. Otherwise, I leave its current color unchanged.</p>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Check the triangle's area
+<ul><li>Compute
+\(D = (x_1 - x_0)(y_2 - y_0) - (y_1 - y_0)(x_2 - x_0)\).
+This is twice the signed area: the cross product gives the signed area of the parallelogram formed by the two edge vectors. If D is zero, the vertices are collinear and there is no filled
+triangle area, so I return. If D is negative, I swap vertices 1 and 2. That gives the edge
+tests a consistent orientation without changing the triangle's shape.</li></ul>
+</li>
+<li>Find pixel bounding box
+<ul><li>I take the minimum and maximum
+x and y coordinates of the three vertices, round the lower bounds down and the upper bounds
+up, and clip the resulting integer ranges to the framebuffer. I return if the clipped box is
+empty. This keeps my loops on the screen and avoids considering the rest of the framebuffer.</li></ul>
+</li>
+<li>Prepare the three edge equations once
+<ul><li>I build equations for edges
+\(V_0 \to V_1\), \(V_1 \to V_2\), and \(V_2 \to V_0\). I store each edge's three coefficients before entering the
+sampling loops, so I do not repeatedly recompute them for every pixel.</li></ul>
+</li>
+<li>Test pixel centers in the basic path
+<ul><li>For each pixel in the bounding
+box, I evaluate all three edges at \((x + 0.5, y + 0.5)\). I accept the sample only when all
+three values are greater than or equal to zero. A negative value means the sample is outside
+at least one edge, so it cannot be inside the triangle.</li></ul>
+</li>
+<li>Store the sample's color
+<ul><li>I call <code>fill_pixel(x, y, color)</code> for each accepted pixel center.
+This stores one color per pixel in the sample buffer; resolving the buffer copies that
+color to the displayed framebuffer. Every accepted pixel receives the same triangle color.</li></ul>
+</li>
+</ol><div class="edge-definition"><p>For an edge from \(A = (a_x, a_y)\) to \(B = (b_x, b_y)\), I use the 2D cross product:</p><div class="equation">\[E_{AB}(P) = (b_x - a_x)(p_y - a_y) - (b_y - a_y)(p_x - a_x)\]</div></div>
 
-			img {
-				display: inline-block;
-			}
 
-			body {
-				font-family: 'Inter', sans-serif;
-			}
-		</style>
-	</head>
-	<body>
-		<div class="container">
-		<h1>CS184/284A Fall 2026 Homework 1 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+<p>I can expand this into \(E_{AB}(P) = a p_x + b p_y + c\), with
+\(a = a_y - b_y\), \(b = b_x - a_x\), and
+\(c = (b_y - a_y)a_x - (b_x - a_x)a_y\). These are the coefficients stored in my
+<code>Edge</code> structure. After I normalize the triangle's orientation, a positive value
+means P is on the interior side of that edge, zero means P is on the edge, and a negative
+value means P is on the exterior side.</p>
+<h3>Why this is no worse than bounding-box method</h3>
+<p>I chose to restrict the loops to the triangle's bounding box because pixels outside that
+rectangle cannot belong to the triangle. My integer bounds conservatively include the triangle
+and may include an extra boundary row or column due to rounding. I never scan the entire
+framebuffer for each triangle. If B is the number of candidate pixels in this rounded box,
+the basic path takes \(O(B)\) time at one sample per pixel: there is constant setup
+work and at most three constant-time edge evaluations per candidate. This has the same
+asymptotic cost as the required bounding-box approach.</p>
+<p>I also handle three important cases explicitly: zero-area triangles return immediately,
+reversed vertex order is normalized, and offscreen bounds are clipped before buffer writes.
+These choices keep the coverage test consistent and the memory accesses within the framebuffer.</p>
+<div class="task-result"><h3>Rendered result</h3><div class="single"><figure><img alt="basic/test4.svg · default view · 1 sample/pixel · pixel grid near the thin red triangle’s tip" src="images/task1-test4-tip-grid.png"></figure></div></div>
 
-		<br>
 
-		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
-		
-		<br>
+<div class="extra-page">
+<h3>Extra credit: Optimization</h3>
+<p>I had two ideas for how to optimize this:</p>
+<ol class="optimization-ideas">
+<li>Precompute the edge equations
+<ul><li>For each triangle, I compute the coefficients in \(E(P) = a p_x + b p_y + c\)
+once. At each pixel center, I only substitute its coordinates into the three prepared
+equations. This avoids rebuilding the edges inside the loop, although I still test every
+pixel in the bounding box.</li></ul>
+</li>
+<li>Fill covered spans
+<ul><li>A horizontal row intersects a triangle in at most one interval. I use the three
+edge inequalities to find its left and right limits, then fill only the pixel centers
+between them. If the interval is empty, I skip the row. This avoids testing empty parts
+of the bounding box, especially for thin triangles.</li></ul></li></ol>
+<p>I compare four versions: vanilla recomputes the cross products at every pixel center;
+idea 1 precomputes the edge equations but still checks the bounding box; idea 2 finds covered
+spans and rebuilds the edge equations for each row; 1 + 2 combines precomputed edges with spans.</p>
+<table>
+<thead><tr><th scope="col">Scene</th><th scope="col">Vanilla (ms)</th>
+<th scope="col">Idea 1 (ms)</th><th scope="col">Idea 2 (ms)</th>
+<th scope="col">1 + 2 (ms)</th></tr></thead>
+<tbody>
+<tr><td>test4.svg</td><td>0.162</td><td>0.154</td><td>0.026</td><td>0.028</td></tr>
+<tr><td>test6.svg</td><td>0.382</td><td>0.322</td><td>0.054</td><td>0.052</td></tr>
+</tbody></table>
+</div>
+</section>
+</main>
 
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
 
-		<figure>
-			<img src="assets/lion.jpg" alt="Lion" style="width:50%"/>
-			<figcaption>You can add images with captions!</figcaption>
-		</figure>
 
-		<!--
-		We've already added one heading per task, to make your write-up as navigable when grading. Please fit your write-up within these sections!
-		-->
-
-		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
-
-		<h2>Task 1: Drawing Single-Color Triangles</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
-		<div style="display: flex; flex-direction: column; align-items: center;">
-			<table style="width: 100%; text-align: center; border-collapse: collapse;">
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-			  </tr>
-			</table>
-		</div>
-		
-		<h2>Task 2: Antialiasing by Supersampling</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 3: Transforms</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 4: Barycentric coordinates</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 5: "Pixel sampling" for texture mapping</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 6: "Level Sampling" with mipmaps for texture mapping</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>(Optional) Task 7: Extra Credit - Draw Something Creative!</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
-				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
-				</ul>
-			</li>
-		</ul>
-		</div>
-	</body>
-</html>
+</body></html>
