@@ -20,6 +20,7 @@
     pre { background: #edf1f5; padding: 14px; overflow-x: auto; line-height: 1.45; }
     .summary { padding: 16px 20px; background: #eef4fa; border-left: 4px solid #145c9c; }
     .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .sampling-comparison { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     figure { margin: 16px 0; break-inside: avoid; }
     img { display: block; width: 100%; height: auto; border: 1px solid #dbe1e8; }
     .single { max-width: 720px; margin: auto; }
@@ -72,9 +73,10 @@
 <header>
 <p>CS184/284A · Fall 2026 · Alex Dils</p>
 <h1>Homework 1: Rasterizer</h1>
-<p>github pages link and alex-dils.com/courses/hw/hw1</p>
+<p><a href="https://cal-cs184-student.github.io/hw1-alex-dils-writeup/">GitHub Pages writeup</a> · <a href="https://alex-dils.com/courses/hw/hw1/">Personal website writeup</a></p>
 <nav aria-label="Sections">
 <a href="#task1">1. Triangles</a>
+<a href="#task2">2. Supersampling</a>
 </nav>
 </header>
 <section id="task1">
@@ -165,6 +167,59 @@ spans and rebuilds the edge equations for each row; 1 + 2 combines precomputed e
 </tbody></table>
 </div>
 </section>
+
+<section id="task2">
+<h2>Task 2: Antialiasing by supersampling</h2>
+<p>In Task 1, I made a binary decision at the center of each pixel. The issue is that this can miss a thin triangle even when it covers part of the pixel. For this task, I take several samples spread across each pixel and average their colors. A pixel partly covered by a triangle gets a mix of the triangle and background colors, which makes the edge look smoother.</p>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Divide each pixel into a grid
+<ul><li>I use \(N = \text{sample\_rate}\) samples per pixel and \(d = \sqrt{N}\) cells along each dimension. I sample the center of each cell. For cell \((s_x, s_y)\), the sample position is
+\(P = \left(x + \frac{s_x + 0.5}{d},\ y + \frac{s_y + 0.5}{d}\right)\).
+At 4 samples per pixel this gives a \(2 \times 2\) grid, and at 16 it gives a \(4 \times 4\) grid. At one sample, it gives the same pixel center as Task 1.</li></ul>
+</li>
+<li>Allocate space for every sample
+<ul><li>I store floating-point <code>Color</code> values in <code>sample_buffer</code>, with all samples for a pixel next to each other. For a framebuffer of width \(W\) and height \(H\), the buffer has \(WHN\) entries. Within a pixel, I use \(s = s_y d + s_x\), so the buffer index is \((yW + x)N + s\). I resize the buffer when the window dimensions or sample rate change, and clear all samples to white before each redraw.</li></ul>
+</li>
+<li>Test and color individual samples
+<ul><li>I keep the winding, bounding box, and inclusive edge tests from Task 1, but apply them to the subpixel positions. An accepted sample gets the triangle's color through <code>fill_sample</code>; an outside sample keeps its previous color. The span optimization also works on these regular sample rows. I resolve only after all scene elements have drawn, so later triangles overwrite just the samples they cover.</li></ul>
+</li>
+<li>Keep points and lines working
+<ul><li>I change <code>fill_pixel</code> to fill all \(N\) samples of a pixel with the same color. Points and lines still use this helper, so they remain visible when supersampling is enabled. I do not antialias these primitives.</li></ul>
+</li>
+<li>Average into the framebuffer
+<ul><li>In <code>resolve_to_framebuffer</code>, I add the sample colors for each pixel and divide by \(N\). I clamp each RGB component to \([0,1]\), multiply by 255, and round to an 8-bit value for the display. This happens once at the end of <code>DrawRend::redraw</code>, after the SVG and its boundary have been rasterized.</li></ul>
+</li>
+</ol>
+<div class="equation">\[C_{\text{pixel}} = \frac{1}{N}\sum_{s=0}^{N-1} C_s\]</div>
+<p>If \(k\) samples contain the triangle's color and the rest contain the background color, the average gives the triangle a weight of \(k/N\). This estimates how much of the pixel the triangle covers. It reduces the abrupt changes caused by a single sample, at the cost of more sample storage and rasterization work.</p>
+<h3>Rendered results</h3>
+<div class="images sampling-comparison">
+<figure><img src="images/task2-test4-1.png" alt="test4 at 1 sample per pixel, with the inspector near the thin red tip"><figcaption>1 sample/pixel</figcaption></figure>
+<figure><img src="images/task2-test4-4.png" alt="test4 at 4 grid samples per pixel, with the same inspector position"><figcaption>4 samples/pixel</figcaption></figure>
+<figure><img src="images/task2-test4-16.png" alt="test4 at 16 grid samples per pixel, with the same inspector position"><figcaption>16 samples/pixel</figcaption></figure>
+</div>
+<p>At one sample per pixel, the enlarged edge has solid red pixels and gaps where the tip misses a pixel center. At four samples, some pixels receive only part of the red color, so the tip is more continuous. At sixteen samples, there are more possible coverage fractions and the transition becomes more gradual. A very thin part can still miss every sample; supersampling improves the estimate without making it exact.</p>
+<h3>Extra credit: Jittered sampling</h3>
+<p>I implemented a jittered pattern that keeps one sample in each grid cell but moves it away from the cell center.</p>
+<ol class="optimization-ideas">
+<li>Move the sample within each cell
+<ul><li>I generate two offsets \(\xi_x, \xi_y \in (0,1)\) and use
+\(P = \left(x + \frac{s_x + \xi_x}{d},\ y + \frac{s_y + \xi_y}{d}\right)\).
+Keeping one sample in each cell spreads the samples across the pixel, while moving them breaks the regular alignment that can miss repeating details. I test each jittered sample against the three edges because the samples no longer form evenly spaced horizontal spans.</li></ul>
+</li>
+<li>Keep the pattern consistent
+<ul><li>I compute the offsets from the pixel coordinates and sample index using a deterministic integer hash. Every triangle uses the same positions for a given pixel, and redrawing produces the same image. This keeps shared edges and overlapping triangles consistent. At one sample per pixel, I retain the Task 1 center sample.</li></ul>
+</li>
+</ol>
+<p>I made <code>basic/task2-stripes.svg</code> with narrow, repeating black bands positioned between the regular sample columns at this view. Both images below use four samples per pixel, the same default view, and the same inspector position.</p>
+<div class="images">
+<figure><img src="images/task2-stripes-grid-4.png" alt="Regular grid sampling misses the narrow black bands"><figcaption>Regular grid · 4 samples/pixel</figcaption></figure>
+<figure><img src="images/task2-stripes-jitter-4.png" alt="Jittered sampling reveals the bands as a noisy gray field"><figcaption>Jittered pattern · 4 samples/pixel</figcaption></figure>
+</div>
+<p>The regular grid misses the bands and shows a white region. With jittered sampling, some samples land inside the bands, revealing their average dark coverage. The result is noisy because each pixel has only four samples. This example shows how jittering reduces a systematic alignment artifact; it does not mean jittered sampling is always smoother than a regular grid.</p>
+</section>
+
 </main>
 
 
