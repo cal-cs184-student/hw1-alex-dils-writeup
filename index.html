@@ -79,6 +79,8 @@
 <a href="#task2">2. Supersampling</a>
 <a href="#task3">3. Transforms</a>
 <a href="#task4">4. Barycentric coordinates</a>
+<a href="#task5">5. Pixel sampling</a>
+<a href="#task6">6. Mipmaps</a>
 </nav>
 </header>
 <section id="task1">
@@ -276,6 +278,89 @@ Keeping one sample in each cell spreads the samples across the pixel, while movi
 <h3>Rendered</h3>
 <div class="single"><figure><img src="images/task4-rgb-triangle.png" alt="Barycentric color triangle with red at the top, green at the lower left, blue at the lower right, and gray near its centroid"></figure></div>
 <div class="single"><figure><img src="images/task4-test7.png" alt="test7 color wheel with a black center and smoothly interpolated colors around the rim"></figure></div>
+</section>
+
+<section id="task5">
+<h2>Task 5: Pixel sampling</h2>
+<p>Pixel sampling determines which texture color to use at a continuous UV coordinate. The texture stores discrete pixels called texels. I use the barycentric weights from Task 4 to interpolate the UV coordinates across each triangle, then sample the texture at that location.</p>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Interpolate the texture coordinates
+<ul><li>I keep the bounding box, winding normalization, and inclusive coverage tests. When swapping vertices, I also swap their UV coordinates. For each covered sample, I combine the three vertex UVs using its barycentric weights:
+<div class="equation">\[(u,v)=\alpha(u_0,v_0)+\beta(u_1,v_1)+\gamma(u_2,v_2)\]</div>
+</li></ul>
+</li>
+<li>Sample the nearest texel
+<ul><li>For a mip level of width \(W\) and height \(H\), I select indices \(\lfloor uW\rfloor\) and \(\lfloor vH\rfloor\). I clamp the UV coordinates and indices at the texture boundary. Each texel's center is at \(((i+0.5)/W,(j+0.5)/H)\). Nearest sampling returns one texel's color, so the result changes abruptly when the sample crosses into another texel.</li></ul>
+</li>
+<li>Blend four neighboring texels
+<ul><li>For bilinear sampling, I use texel coordinates \(x_t=uW-0.5\) and \(y_t=vH-0.5\). I find the four surrounding texels and use the fractional offsets \(s=x_t-\lfloor x_t\rfloor\) and \(t=y_t-\lfloor y_t\rfloor\). I blend horizontally, then vertically, and clamp each neighbor's index at the boundary:
+<div class="equation">\[C=(1-s)(1-t)C_{00}+s(1-t)C_{10}+(1-s)tC_{01}+stC_{11}\]</div>
+</li></ul>
+</li>
+<li>Store each sample's color
+<ul><li>I pass the interpolated UVs and the selected sampling modes to <code>Texture::sample</code>. It calls the nearest or bilinear helper at the chosen mip level. I write that color with <code>fill_sample</code>, and the existing resolve step averages all samples in each pixel. <kbd>P</kbd> switches the pixel sampler. For the comparisons below, I hold the level sampler at <code>L_ZERO</code>.</li></ul>
+</li>
+</ol>
+<h3>Rendered</h3>
+<p>I use <code>texmap/test5.svg</code>, magnified to show the seal's lettering and gold edges. All four PNGs use the same view and inspector position, saved with <kbd>S</kbd>. The first row uses one sample per pixel; the second uses sixteen.</p>
+<div class="images">
+<figure><img src="images/task5-nearest-1.png" alt="Magnified seal with nearest texture sampling at one sample per pixel"><figcaption>Nearest · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task5-bilinear-1.png" alt="Same seal view with bilinear texture sampling at one sample per pixel"><figcaption>Bilinear · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task5-nearest-16.png" alt="Same seal view with nearest texture sampling at sixteen samples per pixel"><figcaption>Nearest · 16 samples/pixel</figcaption></figure>
+<figure><img src="images/task5-bilinear-16.png" alt="Same seal view with bilinear texture sampling at sixteen samples per pixel"><figcaption>Bilinear · 16 samples/pixel</figcaption></figure>
+</div>
+<p>At one sample per pixel, nearest sampling produces sharp steps between gold, white, and blue. Bilinear sampling adds intermediate colors along those boundaries, making the lettering and curved details smoother. Sixteen samples average several texture lookups within each pixel, improving both the texture transitions and triangle edges. Bilinear at sixteen samples gives the smoothest transitions in this comparison.</p>
+<p>The difference is large when texels are magnified or contain high-contrast details. It is smaller in regions where neighboring texels already have similar colors. When many texels fit inside one screen pixel, bilinear sampling's four neighbors do not cover the whole footprint; mipmaps help with that case.</p>
+</section>
+
+<section id="task6">
+<h2>Task 6: Level sampling with mipmaps</h2>
+<p>Level sampling chooses a texture resolution that matches the size of a screen pixel's footprint. The original image is level zero. Each later mip level stores a smaller, prefiltered version. When a pixel covers many original texels, sampling a reduced level averages that detail before rasterization and reduces aliasing.</p>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Find the UV change across one pixel
+<ul><li>I calculate UV coordinates at the sample, one screen pixel to its right, and one screen pixel below it. UV interpolation is affine within each triangle, so I precompute its horizontal and vertical changes from the edge coefficients and add those changes to each sample's UV. I store the three positions in <code>p_uv</code>, <code>p_dx_uv</code>, and <code>p_dy_uv</code>. These offsets remain one full screen pixel even when supersampling is enabled.</li></ul>
+</li>
+<li>Estimate the texture footprint
+<ul><li>In <code>get_level</code>, I subtract the sample's UV from the neighboring UVs and scale their components by the original texture's width \(W\) and height \(H\). I take the longer of the two vectors as the footprint size \(\rho\):
+<div class="equation">\[d_x=\bigl(W(u_x-u),\,H(v_x-v)\bigr),\qquad d_y=\bigl(W(u_y-u),\,H(v_y-v)\bigr)\]</div>
+<div class="equation">\[\rho=\max(\|d_x\|,\|d_y\|),\qquad \ell=\max(0,\log_2\rho)\]</div>
+A footprint of two texels selects level one; four texels selects level two. If the footprint is at most one texel, I use level zero without taking the logarithm. I clamp the result to the available mip levels.</li></ul>
+</li>
+<li>Choose or blend the levels
+<ul><li><code>L_ZERO</code> always uses the original image. <code>L_NEAREST</code> rounds \(\ell\) to the nearest level. <code>L_LINEAR</code> samples the levels below and above \(\ell\), then blends their colors using its fractional part:
+<div class="equation">\[C=(1-f)C_{\lfloor\ell\rfloor}+fC_{\lceil\ell\rceil},\qquad f=\ell-\lfloor\ell\rfloor\]</div>
+</li></ul>
+</li>
+<li>Apply the pixel sampler
+<ul><li>The pixel and level choices are independent. Each selected mip level uses either nearest or bilinear sampling. Combining <code>L_LINEAR</code> with <code>P_LINEAR</code> gives trilinear filtering: bilinear sampling within each of two levels, followed by interpolation between them. <kbd>L</kbd> cycles the level sampler, and <kbd>P</kbd> cycles the pixel sampler.</li></ul>
+</li>
+<li>Populate the full mip chain
+<ul><li>I use the starter's averaging filter to construct progressively smaller images, and make sure the generation loop fills every allocated level through the last \(1\times1\) image. Sampling accesses each level by reference, so it does not copy the texture data.</li></ul>
+</li>
+</ol>
+<h3>Tradeoffs</h3>
+<table>
+<thead><tr><th>Technique</th><th>Work and memory</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Pixel sampling</td><td>Nearest reads one texel; bilinear reads four. Both use the same texture storage.</td><td>Bilinear smooths transitions between texels, especially during magnification.</td></tr>
+<tr><td>Level sampling</td><td>Blending two levels uses up to two nearest or eight bilinear texel reads. A full mip chain adds about one third to a large square texture's storage.</td><td>Prefiltered levels reduce texture aliasing during minification. Trilinear filtering softens changes between mip resolutions, with some loss of fine detail.</td></tr>
+<tr><td>Supersampling</td><td>\(N\) samples repeat the rasterization and texture lookup work. The sample buffer stores \(WHN\) floating-point colors for a \(W\times H\) framebuffer.</td><td>More samples improve pixel coverage and average texture variation within a pixel. They cost more rendering time and sample memory.</td></tr>
+</tbody>
+</table>
+<h3>Rendered</h3>
+<p>I downloaded a \(1000\times1000\) parabolic checkerboard PNG and mapped it onto the warped mesh from <code>texmap/test2.svg</code> in <a href="task6-parabolic.svg"><code>task6-parabolic.svg</code></a>. Its small repeated features help show minification artifacts. All four PNGs below use one sample per pixel, the same view, and the same inspector position. I saved them with <kbd>S</kbd>.</p>
+<p class="note">Texture: <a href="https://commons.wikimedia.org/wiki/File:A_parabolic_checkerboard_for_rotation_number_1_over_2.png">A parabolic checkerboard for rotation number 1 over 2</a> by Adam Majewski, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. The downloaded PNG is unchanged; these rendered comparisons are also shared under that license.</p>
+<div class="images">
+<figure><img src="images/task6-zero-nearest.png" alt="Fractal texture sampled from level zero using nearest texels"><figcaption>L_ZERO + P_NEAREST · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-zero-bilinear.png" alt="Same fractal texture sampled from level zero using bilinear filtering"><figcaption>L_ZERO + P_LINEAR · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-nearest-nearest.png" alt="Same fractal texture with nearest mip level and nearest texels"><figcaption>L_NEAREST + P_NEAREST · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-nearest-bilinear.png" alt="Same fractal texture with nearest mip level and bilinear filtering"><figcaption>L_NEAREST + P_LINEAR · 1 sample/pixel</figcaption></figure>
+</div>
+<p>At level zero, the inspector shows isolated dark pixels and abrupt changes around the small features. Bilinear sampling softens some boundaries, but it still uses the full-resolution image. Choosing a mip level reduces those isolated pixels by averaging more of the original texture. Adding bilinear sampling smooths transitions within that reduced level. The tradeoff is that some tiny features become softer or disappear.</p>
+<div class="single"><figure><img src="images/task6-trilinear.png" alt="Same fractal texture using trilinear filtering"><figcaption>L_LINEAR + P_LINEAR · 1 sample/pixel</figcaption></figure></div>
+<p>The trilinear image blends adjacent mip levels instead of switching to a single rounded level. This makes the filtering change more gradually as the texture footprint varies across the mesh.</p>
 </section>
 
 </main>

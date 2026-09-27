@@ -1,0 +1,8 @@
+A parabolic checkerboard for rotation number 1 over 2
+Adam Majewski
+https://commons.wikimedia.org/wiki/File:A_parabolic_checkerboard_for_rotation_number_1_over_2.png
+https://upload.wikimedia.org/wikipedia/commons/a/a7/A_parabolic_checkerboard_for_rotation_number_1_over_2.png
+CC BY-SA 4.0
+https://creativecommons.org/licenses/by-sa/4.0/
+Downloaded unchanged; screenshots render the image through the homework rasterizer.
+Rendered Task 6 comparisons are also provided under CC BY-SA 4.0.
