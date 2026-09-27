@@ -15,7 +15,7 @@
     .task-algorithm ul, .optimization-ideas ul { margin: 6px 0 12px; padding-left: 24px; list-style-type: disc; }
     .optimization-ideas > li::marker { content: counter(list-item) ") "; }
     a { color: #145c9c; }
-    nav { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 24px 0; }
+    nav { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 24px 0; }
     code, kbd { background: #edf1f5; padding: 2px 5px; border-radius: 4px; font: .9em ui-monospace, monospace; }
     pre { background: #edf1f5; padding: 14px; overflow-x: auto; line-height: 1.45; }
     .summary { padding: 16px 20px; background: #eef4fa; border-left: 4px solid #145c9c; }
@@ -77,6 +77,7 @@
 <nav aria-label="Sections">
 <a href="#task1">1. Triangles</a>
 <a href="#task2">2. Supersampling</a>
+<a href="#task3">3. Transforms</a>
 </nav>
 </header>
 <section id="task1">
@@ -90,7 +91,7 @@ I give that pixel the triangle's color. Otherwise, I leave its current color unc
 <li>Check the triangle's area
 <ul><li>Compute
 \(D = (x_1 - x_0)(y_2 - y_0) - (y_1 - y_0)(x_2 - x_0)\).
-This is twice the signed area: the cross product gives the signed area of the parallelogram formed by the two edge vectors. If D is zero, the vertices are collinear and there is no filled
+This is twice the (signed) area because the cross product gives the area of the parallelogram formed by the two edge vectors. If D is zero, the vertices are collinear and there is no filled
 triangle area, so I return. If D is negative, I swap vertices 1 and 2. That gives the edge
 tests a consistent orientation without changing the triangle's shape.</li></ul>
 </li>
@@ -209,15 +210,43 @@ At 4 samples per pixel this gives a \(2 \times 2\) grid, and at 16 it gives a \(
 Keeping one sample in each cell spreads the samples across the pixel, while moving them breaks the regular alignment that can miss repeating details. I test each jittered sample against the three edges because the samples no longer form evenly spaced horizontal spans.</li></ul>
 </li>
 <li>Keep the pattern consistent
-<ul><li>I compute the offsets from the pixel coordinates and sample index using a deterministic integer hash. Every triangle uses the same positions for a given pixel, and redrawing produces the same image. This keeps shared edges and overlapping triangles consistent. At one sample per pixel, I retain the Task 1 center sample.</li></ul>
-</li>
-</ol>
-<p>I made <code>basic/task2-stripes.svg</code> with narrow, repeating black bands positioned between the regular sample columns at this view. Both images below use four samples per pixel, the same default view, and the same inspector position.</p>
+<ul><li>I compute the offsets from the pixel coordinates and sample index using a deterministic integer hash. Every triangle uses the same positions for a given pixel, and redrawing produces the same image. This keeps shared edges and overlapping triangles consistent. At one sample per pixel, I retain the Task 1 center sample.</li></ul></li></ol>
 <div class="images">
 <figure><img src="images/task2-stripes-grid-4.png" alt="Regular grid sampling misses the narrow black bands"><figcaption>Regular grid · 4 samples/pixel</figcaption></figure>
-<figure><img src="images/task2-stripes-jitter-4.png" alt="Jittered sampling reveals the bands as a noisy gray field"><figcaption>Jittered pattern · 4 samples/pixel</figcaption></figure>
-</div>
-<p>The regular grid misses the bands and shows a white region. With jittered sampling, some samples land inside the bands, revealing their average dark coverage. The result is noisy because each pixel has only four samples. This example shows how jittering reduces a systematic alignment artifact; it does not mean jittered sampling is always smoother than a regular grid.</p>
+<figure><img src="images/task2-stripes-jitter-4.png" alt="Jittered sampling reveals the bands as a noisy gray field"><figcaption>Jittered pattern · 4 samples/pixel</figcaption></figure></div>
+</section>
+
+
+<section id="task3">
+<h2>Task 3: Transforms</h2>
+<p>I use transforms to move, resize, and rotate shapes before rasterizing them. I represent a point as \((x,y,1)\), so all three operations can use a \(3 \times 3\) matrix. The last coordinate lets translation work through matrix multiplication, just like scaling and rotation</p>
+<h3>Algorithm:</h3>
+<ol class="task-algorithm">
+<li>Translate the point
+<ul><li>I put the horizontal and vertical offsets in the last column. Multiplying by this matrix changes \((x,y)\) to \((x+d_x,y+d_y)\), without changing the shape's size or orientation.
+<div class="equation">\[T = \begin{pmatrix}1 &amp; 0 &amp; d_x \\ 0 &amp; 1 &amp; d_y \\ 0 &amp; 0 &amp; 1\end{pmatrix}\]</div>
+</li></ul>
+</li>
+<li>Scale the point
+<ul><li>I put the scale factors on the diagonal. This changes \((x,y)\) to \((s_xx,s_yy)\). Using different factors stretches the shape differently along each axis. Scaling happens around the origin of the current coordinate system.
+<div class="equation">\[S = \begin{pmatrix}s_x &amp; 0 &amp; 0 \\ 0 &amp; s_y &amp; 0 \\ 0 &amp; 0 &amp; 1\end{pmatrix}\]</div>
+</li></ul>
+</li>
+<li>Rotate the point
+<ul><li>I convert the angle from degrees to radians, then use sine and cosine to rotate around the origin. The matrix is counterclockwise in Cartesian coordinates. Since SVG coordinates increase downward along the y axis, a positive angle appears clockwise in the rendered image.
+<div class="equation">\[\theta = \mathrm{deg}\,\frac{\pi}{180},\qquad R = \begin{pmatrix}\cos\theta &amp; -\sin\theta &amp; 0 \\ \sin\theta &amp; \cos\theta &amp; 0 \\ 0 &amp; 0 &amp; 1\end{pmatrix}\]</div></li></ul></li>
+</ol>
+<h3>Rendered</h3>
+<p>I made cubeman dab. I move the right shoulder to \((50,-30)\), rotate the upper arm by \(-35^\circ\), and leave the forearm aligned with it so that arm extends upward. At the left shoulder, I rotate the upper arm by \(-145^\circ\) and translate a child group 70 units to the elbow. Rotating that child by \(130^\circ\) brings the forearm across the face. I move the head to \((-18,-96)\), tilt it by \(25^\circ\), and keep the legs spread slightly.</p>
+<p>I saved the custom SVG as <a href="my_robot.svg"><code>my_robot.svg</code></a>. The PNG below comes from the renderer's <kbd>S</kbd> hotkey at 16 samples per pixel.</p>
+<div class="single"><figure><img src="images/task3-dabbing-cubeman.png" alt="Custom cubeman dabbing with one arm extended and the other across its face"></figure></div>
+<h3>Extra credit: Rotate the viewport</h3>
+<p>I added <kbd>[</kbd> and <kbd>]</kbd> to rotate the view in 10-degree steps. <kbd>[</kbd> rotates it counterclockwise on screen, and <kbd>]</kbd> rotates it clockwise. Each SVG tab remembers its own angle, and <kbd>Space</kbd> resets the active tab's angle and view.</p>
+<div class="equation">\[P_{\mathrm{screen}} = M_{\mathrm{NDC\to screen}}\,T(0.5,0.5)\,R(\theta)\,T(-0.5,-0.5)\,M_{\mathrm{SVG\to NDC}}\,P_{\mathrm{SVG}}\]</div>
+<p>This rotates the whole scene around the center of the viewport. I apply the same matrix to the canvas outline, so it turns with the drawing. When dragging a rotated view, I rotate the mouse displacement by the inverse angle before updating the view center. The image below was saved with <kbd>S</kbd> after one press of <kbd>]</kbd>.</p>
+<div class="single"><figure><img src="images/task3-dab-viewport-10.png" alt="The dabbing cubeman and canvas outline rotated clockwise by 10 degrees"><figcaption><br></figcaption></figure></div>
+<p><br></p>
+<div class="single"><figure><img src="images/task3-dab-spin.gif" alt="Dabbing cubeman and canvas rotating clockwise through a full circle"><figcaption>dabbin rotating</figcaption></figure></div>
 </section>
 
 </main>
