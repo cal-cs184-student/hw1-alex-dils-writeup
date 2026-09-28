@@ -75,6 +75,7 @@
 <h1>Homework 1: Rasterizer</h1>
 <p><a href="https://cal-cs184-student.github.io/hw1-alex-dils-writeup/">https://cal-cs184-student.github.io/hw1-alex-dils-writeup/</a> · <a href="https://alex-dils.com/courses/hw/hw1/">https://alex-dils.com/courses/hw/hw1/</a></p>
 <nav aria-label="Sections">
+<a href="#overview">Overview</a>
 <a href="#task1">1. Triangles</a>
 <a href="#task2">2. Supersampling</a>
 <a href="#task3">3. Transforms</a>
@@ -83,6 +84,11 @@
 <a href="#task6">6. Mipmaps</a>
 </nav>
 </header>
+<section id="overview">
+<h2>Summary</h2>
+<p>In this homework, I built a rasterizer that turns SVG shapes (continuous) into pixels (discrete). I started by rasterizing a triangle, then added supersampling to smooth the edges. I implemented translation, scaling, and rotation, used barycentric coordinates to blend colors and interpolate texture coordinates, and added nearest, bilinear, and mipmap sampling for textures. For extra credit, I optimized triangle filling, added jittered samples, allowed the viewport to rotate, and implemented anisotropic filtering.</p>
+<p>I took away two lessons from the project. First, I learned a lot of C++ which I had not used before. Secondly, I learned the pipeline to represent SVG and how we can make some tradeoffs to get realistic loooking renders. For example, anisotropic filtering keeps more detail when that pixel's texture footprint is stretched differently in two directions. I also needed to keep colors and UV coordinates attached to their vertices when changing winding, and use a full-pixel UV offset for mip selection even with supersampling. Looking at the inspector views and timings helped me see the tradeoffs between smoother results, sharpness, memory, and rendering time.</p>
+</section>
 <section id="task1">
 <h2>Task 1: Drawing triangles</h2>
 <p>Rasterization is deciding which pixels should be mapped from a continous triangle.
