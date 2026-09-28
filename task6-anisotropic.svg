@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="200px" height="200px" viewBox="0 0 200 200">
+<texture filename="textures/task6-anisotropic.png" texid="bands"/>
+<textri texid="bands" uvs="0 0 1 0 0 1" points="55 20 69 20 130 180"/>
+<textri texid="bands" uvs="1 0 1 1 0 1" points="69 20 144 180 130 180"/>
+</svg>

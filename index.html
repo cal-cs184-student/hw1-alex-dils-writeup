@@ -311,7 +311,7 @@ Keeping one sample in each cell spreads the samples across the pixel, while movi
 <figure><img src="images/task5-bilinear-16.png" alt="Same seal view with bilinear texture sampling at sixteen samples per pixel"><figcaption>Bilinear · 16 samples/pixel</figcaption></figure>
 </div>
 <p>At one sample per pixel, nearest sampling produces sharp steps between gold, white, and blue. Bilinear sampling adds intermediate colors along those boundaries, making the lettering and curved details smoother. Sixteen samples average several texture lookups within each pixel, improving both the texture transitions and triangle edges. Bilinear at sixteen samples gives the smoothest transitions in this comparison.</p>
-<p>The difference is large when texels are magnified or contain high-contrast details. It is smaller in regions where neighboring texels already have similar colors. When many texels fit inside one screen pixel, bilinear sampling's four neighbors do not cover the whole footprint; mipmaps help with that case.</p>
+<p>The difference is large when texels are magnified or contain high-contrast details. It is smaller in regions where neighboring texels already have similar colors. When many texels fit inside one screen pixel, bilinear sampling's four neighbors do not cover the whole footprint... mipmaps help with that case.</p>
 </section>
 
 <section id="task6">
@@ -350,17 +350,49 @@ A footprint of two texels selects level one; four texels selects level two. If t
 </tbody>
 </table>
 <h3>Rendered</h3>
-<p>I downloaded a \(1000\times1000\) parabolic checkerboard PNG and mapped it onto the warped mesh from <code>texmap/test2.svg</code> in <a href="task6-parabolic.svg"><code>task6-parabolic.svg</code></a>. Its small repeated features help show minification artifacts. All four PNGs below use one sample per pixel, the same view, and the same inspector position. I saved them with <kbd>S</kbd>.</p>
-<p class="note">Texture: <a href="https://commons.wikimedia.org/wiki/File:A_parabolic_checkerboard_for_rotation_number_1_over_2.png">A parabolic checkerboard for rotation number 1 over 2</a> by Adam Majewski, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. The downloaded PNG is unchanged; these rendered comparisons are also shared under that license.</p>
 <div class="images">
-<figure><img src="images/task6-zero-nearest.png" alt="Fractal texture sampled from level zero using nearest texels"><figcaption>L_ZERO + P_NEAREST · 1 sample/pixel</figcaption></figure>
-<figure><img src="images/task6-zero-bilinear.png" alt="Same fractal texture sampled from level zero using bilinear filtering"><figcaption>L_ZERO + P_LINEAR · 1 sample/pixel</figcaption></figure>
-<figure><img src="images/task6-nearest-nearest.png" alt="Same fractal texture with nearest mip level and nearest texels"><figcaption>L_NEAREST + P_NEAREST · 1 sample/pixel</figcaption></figure>
-<figure><img src="images/task6-nearest-bilinear.png" alt="Same fractal texture with nearest mip level and bilinear filtering"><figcaption>L_NEAREST + P_LINEAR · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-earth-zero-nearest.png" alt="Earth texture sampled from level zero using nearest texels"><figcaption>L_ZERO + P_NEAREST · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-earth-zero-bilinear.png" alt="Same Earth texture sampled from level zero using bilinear filtering"><figcaption>L_ZERO + P_LINEAR · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-earth-nearest-nearest.png" alt="Same Earth texture with nearest mip level and nearest texels"><figcaption>L_NEAREST + P_NEAREST · 1 sample/pixel</figcaption></figure>
+<figure><img src="images/task6-earth-nearest-bilinear.png" alt="Same Earth texture with nearest mip level and bilinear filtering"><figcaption>L_NEAREST + P_LINEAR · 1 sample/pixel</figcaption></figure>
 </div>
-<p>At level zero, the inspector shows isolated dark pixels and abrupt changes around the small features. Bilinear sampling softens some boundaries, but it still uses the full-resolution image. Choosing a mip level reduces those isolated pixels by averaging more of the original texture. Adding bilinear sampling smooths transitions within that reduced level. The tradeoff is that some tiny features become softer or disappear.</p>
-<div class="single"><figure><img src="images/task6-trilinear.png" alt="Same fractal texture using trilinear filtering"><figcaption>L_LINEAR + P_LINEAR · 1 sample/pixel</figcaption></figure></div>
+<p>At level zero, fine terrain details have abrupt color changes, and the inspector shows sharp steps along the coastline. Bilinear sampling softens nearby texel transitions, but still uses the full-resolution image. Choosing a mip level averages more of the original terrain detail and reduces the speckled appearance. Adding bilinear sampling smooths the coastline within that reduced level. The tradeoff is that small islands and narrow features become softer or disappear.</p>
+<div class="single"><figure><img src="images/task6-earth-trilinear.png" alt="Same Earth texture using trilinear filtering"><figcaption>L_LINEAR + P_LINEAR · 1 sample/pixel</figcaption></figure></div>
 <p>The trilinear image blends adjacent mip levels instead of switching to a single rounded level. This makes the filtering change more gradually as the texture footprint varies across the mesh.</p>
+<div class="extra-page" id="task6-ec">
+<h3>Extra credit: Anisotropic filtering</h3>
+<p>A screen pixel can cover a long, narrow region of a texture. Using one mip level for both directions can blur details along the narrower direction. I added anisotropic filtering, which takes several trilinear samples along the longer direction and averages them.</p>
+<ol class="optimization-ideas">
+<li>Find the footprint's two main directions
+<ul><li>I reuse the UV changes from Task 6 and scale them into texel units. I put these vectors into a matrix \(J\), then use the eigenvalues of \(J^T J\) to find the long and short axis lengths, \(\sigma_{\mathrm{major}}\) and \(\sigma_{\mathrm{minor}}\). I also calculate the long axis's direction in texture space. This accounts for rotation and shear, rather than assuming the longest direction is horizontal or vertical.</li></ul>
+</li>
+<li>Choose the mip level and sample count
+<ul><li>I choose the mip level from the short axis, then place enough samples along the long axis to cover its extent. I limit the count to eight. If the footprint is more stretched than that, I increase the mip width so the eight samples still cover it:
+<div class="equation">\[w=\max\left(1,\sigma_{\mathrm{minor}},\frac{\sigma_{\mathrm{major}}}{8}\right),\qquad n=\min\left(8,\max\left(1,\left\lceil\frac{\sigma_{\mathrm{major}}}{w}\right\rceil\right)\right)\]</div>
+I use \(\ell=\log_2 w\), clamped to the available mip levels. The one-texel minimum keeps magnified textures at level zero.</li></ul>
+</li>
+<li>Average the trilinear samples
+<ul><li>I distribute the \(n\) sample centers evenly along the long axis, centered around the original UV. Each sample uses bilinear filtering at the two neighboring mip levels, followed by the usual interpolation between levels. I average their colors before writing the rasterization sample. With a nearly square footprint, this reduces to one lookup. <kbd>A</kbd> switches this mode on and off; when it is off, the existing <kbd>P</kbd> and <kbd>L</kbd> choices apply again.</li></ul>
+</li>
+</ol>
+<h3>Rendered comparison</h3>
+<p>I generated a \(512\times512\) texture with narrow vertical stripes and alternating orange and blue bands. The texture is compressed much more in one direction than the other. All four PNGs use the same default view, one sample per pixel, and the same pixel inspector position. They were generated through the renderer's <kbd>S</kbd> screenshot handler.</p>
+<div class="images">
+<figure><img src="images/task6-ec-nearest.png" alt="Slanted band texture with nearest filtering and visible fine stripe aliasing"><figcaption>Nearest · L_ZERO + P_NEAREST</figcaption></figure>
+<figure><img src="images/task6-ec-bilinear.png" alt="The same slanted texture with bilinear filtering and remaining stripe aliasing"><figcaption>Bilinear · L_ZERO + P_LINEAR</figcaption></figure>
+<figure><img src="images/task6-ec-trilinear.png" alt="The same texture with trilinear filtering, with muted and blurred color bands"><figcaption>Trilinear · L_LINEAR + P_LINEAR</figcaption></figure>
+<figure><img src="images/task6-ec-anisotropic.png" alt="The same texture with anisotropic filtering, retaining distinct orange and blue bands"><figcaption>Anisotropic · up to 8 trilinear taps</figcaption></figure>
+</div>
+<p>Nearest and bilinear sampling leave a fine pattern that changes with the texture's alignment to the screen. Trilinear sampling reduces that pattern, but also mixes the orange and blue bands because its mip level filters both directions equally. Anisotropic sampling averages across the strongly compressed direction while keeping the bands more distinct in the other direction. It still softens boundaries, and the eight-tap limit means extremely stretched footprints can lose detail.</p>
+<h3>Timing comparison</h3>
+<table>
+<thead><tr><th scope="col">Method</th><th scope="col">Time per draw (ms)</th><th scope="col">Time relative to nearest</th></tr></thead>
+<tbody>
+<tr><td>Nearest</td><td>1.306</td><td>1.00×</td></tr>
+<tr><td>Bilinear</td><td>1.630</td><td>1.25×</td></tr>
+<tr><td>Trilinear</td><td>2.786</td><td>2.13×</td></tr>
+<tr><td>Anisotropic</td><td>11.880</td><td>9.10×</td></tr></tbody></table>
+</div>
 </section>
 
 </main>
